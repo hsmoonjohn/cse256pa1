@@ -1,4 +1,4 @@
-# models.py
+#main.py
 
 import torch
 from torch import nn
@@ -11,6 +11,8 @@ import argparse
 import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 from BOWmodels import SentimentDatasetBOW, NN2BOW, NN3BOW
+from DANmodels import DAN
+from sentiment_data import read_word_embeddings
 
 
 # Training function
@@ -20,8 +22,9 @@ def train_epoch(data_loader, model, loss_fn, optimizer):
     model.train()
     train_loss, correct = 0, 0
     for batch, (X, y) in enumerate(data_loader):
-        X = X.float()
-
+        #X = X.float()
+        if X.dtype != torch.long:
+            X = X.long()  # Convert to LongTensor if it's not
         # Compute prediction error
         pred = model(X)
         loss = loss_fn(pred, y)
@@ -46,8 +49,9 @@ def eval_epoch(data_loader, model, loss_fn, optimizer):
     eval_loss = 0
     correct = 0
     for batch, (X, y) in enumerate(data_loader):
-        X = X.float()
-
+        #X = X.float()
+        if X.dtype != torch.long:
+            X = X.long()  # Convert to LongTensor if it's not
         # Compute prediction error
         pred = model(X)
         loss = loss_fn(pred, y)
@@ -62,7 +66,7 @@ def eval_epoch(data_loader, model, loss_fn, optimizer):
 # Experiment function to run training and evaluation for multiple epochs
 def experiment(model, train_loader, test_loader):
     loss_fn = nn.NLLLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
     all_train_accuracy = []
     all_test_accuracy = []
@@ -145,8 +149,29 @@ def main():
         # plt.show()
 
     elif args.model == "DAN":
-        #TODO:  Train and evaluate your DAN
-        print("DAN model not implemented yet")
+        # Load pre-trained GloVe embeddings (e.g., 50d)
+        glove_embeddings = read_word_embeddings("data/glove.6B.300d-relativized.txt")
+
+        # Initialize the DAN model
+        dan_model = DAN(embeddings=glove_embeddings, hidden_size=300, dropout=0.1, num_layers=2, fine_tune_embeddings=False)
+
+        # Now train the DAN model like the BOW models
+        #experiment(dan_model, train_loader, test_loader)
+    
+        # Train and evaluate the DAN model
+        print('\nTraining DAN model:')
+        dan_train_accuracy, dan_test_accuracy = experiment(dan_model, train_loader, test_loader)
+
+        # Plot results (similar to BOW)
+        plt.figure(figsize=(8, 6))
+        plt.plot(dan_train_accuracy, label='DAN Train Accuracy')
+        plt.plot(dan_test_accuracy, label='DAN Test Accuracy')
+        plt.xlabel('Epochs')
+        plt.ylabel('Accuracy')
+        plt.title('Training and Dev Accuracy for DAN')
+        plt.legend()
+        plt.grid()
+        plt.show()
 
 if __name__ == "__main__":
     main()
