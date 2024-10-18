@@ -90,9 +90,18 @@ class WordEmbeddings:
     Wraps an Indexer and a list of 1-D numpy arrays where each position in the list is the vector for the corresponding
     word in the indexer. The 0 vector is returned if an unknown word is queried.
     """
-    def __init__(self, word_indexer, vectors):
+    def __init__(self, word_indexer, vectors=None, random_init=False, embedding_dim=300):
         self.word_indexer = word_indexer
-        self.vectors = vectors
+        if random_init:
+            vocab_size = len(word_indexer)
+            # Random initialization of embeddings normal random was too big in scale, so switched to unif(-0.1,0.1)
+            self.vectors = np.random.uniform(-0.1, 0.1, (vocab_size, embedding_dim)).astype(np.float32)
+
+            #self.vectors = np.random.randn(vocab_size, embedding_dim).astype(np.float32)
+            print(f"Randomly initialized embeddings with shape {self.vectors.shape}")
+        else:
+            # Use the pre-trained vectors (e.g., GloVe)
+            self.vectors = vectors
 
     def get_initialized_embedding_layer(self, frozen=True):
         """

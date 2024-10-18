@@ -7,7 +7,7 @@ from sentiment_data import read_sentiment_examples
 from torch.utils.data import Dataset
 
 class DAN(nn.Module):
-    def __init__(self, embeddings, hidden_size=300, dropout=0.3, num_layers=4, fine_tune_embeddings=False, dropoutword=0.3):
+    def __init__(self, embeddings, hidden_size=300, dropout=0.3, num_layers=4, dropoutword=0.3, fine_tune_embeddings=False, random_embedding=False):
         """
         Initialize the Deep Averaging Network (DAN).
         
@@ -21,9 +21,13 @@ class DAN(nn.Module):
         super(DAN, self).__init__()
         
         # Embedding layer
-        self.embedding = embeddings.get_initialized_embedding_layer(frozen=not fine_tune_embeddings)
         embedding_dim = embeddings.get_embedding_length()
-        # Averaging layer - No specific layer, we just average the embeddings in the forward pass
+        if random_embedding:
+            self.embedding = embeddings.get_initialized_embedding_layer(frozen=False)
+            print(self.embedding)
+        else:
+            self.embedding = embeddings.get_initialized_embedding_layer(frozen=not fine_tune_embeddings)
+            embedding_dim = embeddings.get_embedding_length()
         
         # Fully connected layers
         self.hidden_layers = nn.ModuleList()
