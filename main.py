@@ -110,8 +110,8 @@ def main():
         max_length = 100  # You can adjust this based on the dataset analysis
         train_data = SentimentDatasetDAN("data/train.txt", word_indexer, max_length=max_length)
         dev_data = SentimentDatasetDAN("data/dev.txt", word_indexer, max_length=max_length)
-        train_loader = DataLoader(train_data, batch_size=32, shuffle=True)
-        test_loader = DataLoader(dev_data, batch_size=32, shuffle=False)
+        train_loader = DataLoader(train_data, batch_size=8, shuffle=True)
+        test_loader = DataLoader(dev_data, batch_size=8, shuffle=False)
 
     end_time = time.time()
     elapsed_time = end_time - start_time
@@ -166,7 +166,7 @@ def main():
         #glove_embeddings = read_word_embeddings("data/glove.6B.300d-relativized.txt")
 
         # Initialize the DAN model
-        dan_model = DAN(embeddings=glove_embeddings, hidden_size=64, dropout=0.5, num_layers=2, fine_tune_embeddings=False)
+        dan_model = DAN(embeddings=glove_embeddings, hidden_size=128, dropout=0.5, num_layers=2, dropoutword=0.4, fine_tune_embeddings=False)
 
         # Train and evaluate the DAN model
         print('\nTraining DAN model:')

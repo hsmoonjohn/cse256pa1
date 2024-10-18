@@ -7,7 +7,7 @@ from sentiment_data import read_sentiment_examples
 from torch.utils.data import Dataset
 
 class DAN(nn.Module):
-    def __init__(self, embeddings, hidden_size=300, dropout=0.3, num_layers=4, fine_tune_embeddings=False):
+    def __init__(self, embeddings, hidden_size=300, dropout=0.3, num_layers=4, fine_tune_embeddings=False, dropoutword=0.3):
         """
         Initialize the Deep Averaging Network (DAN).
         
@@ -33,7 +33,7 @@ class DAN(nn.Module):
         
         # Dropout for regularization
         self.dropout = nn.Dropout(dropout)
-        self.dropoutword = dropout
+        self.dropoutword = dropoutword
         
         # Output layer for binary classification (2 classes: positive, negative)
         self.output_layer = nn.Linear(hidden_size, 2)
@@ -53,6 +53,11 @@ class DAN(nn.Module):
         """
         # Embed the word indices
         embedded = self.embedding(x)
+
+        # Apply word dropout: randomly zero out some word embeddings
+        if self.training:  # Only apply dropout during training
+            mask = (torch.rand(embedded.shape[:2]) > self.dropoutword).float().unsqueeze(2).to(embedded.device)
+            embedded = embedded * mask  # Zero out some word embeddings
         
         # Average the embeddings (average along the sentence length dimension)
         sentence_embedding = embedded.mean(dim=1)
