@@ -11,7 +11,7 @@ import argparse
 import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 from BOWmodels import SentimentDatasetBOW, NN2BOW, NN3BOW
-from DANmodels import DAN
+from DANmodels import DAN, SentimentDatasetDAN
 from sentiment_data import read_word_embeddings
 
 
@@ -66,7 +66,7 @@ def eval_epoch(data_loader, model, loss_fn, optimizer):
 # Experiment function to run training and evaluation for multiple epochs
 def experiment(model, train_loader, test_loader):
     loss_fn = nn.NLLLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.0001, weight_decay=5e-5)
 
     all_train_accuracy = []
     all_test_accuracy = []
@@ -92,13 +92,26 @@ def main():
     # Parse the command-line arguments
     args = parser.parse_args()
 
+    # Load pretrained GloVe embeddings
+    glove_embeddings = read_word_embeddings("data/glove.6B.300d-relativized.txt")
+    
+    # Obtain the word indexer from the pretrained embeddings
+    word_indexer = glove_embeddings.word_indexer
+
     # Load dataset
     start_time = time.time()
+    if args.model == "BOW":
+        train_data = SentimentDatasetBOW("data/train.txt")
+        dev_data = SentimentDatasetBOW("data/dev.txt")
+        train_loader = DataLoader(train_data, batch_size=16, shuffle=True)
+        test_loader = DataLoader(dev_data, batch_size=16, shuffle=False)
 
-    train_data = SentimentDatasetBOW("data/train.txt")
-    dev_data = SentimentDatasetBOW("data/dev.txt")
-    train_loader = DataLoader(train_data, batch_size=16, shuffle=True)
-    test_loader = DataLoader(dev_data, batch_size=16, shuffle=False)
+    elif args.model == "DAN":
+        max_length = 100  # You can adjust this based on the dataset analysis
+        train_data = SentimentDatasetDAN("data/train.txt", word_indexer, max_length=max_length)
+        dev_data = SentimentDatasetDAN("data/dev.txt", word_indexer, max_length=max_length)
+        train_loader = DataLoader(train_data, batch_size=32, shuffle=True)
+        test_loader = DataLoader(dev_data, batch_size=32, shuffle=False)
 
     end_time = time.time()
     elapsed_time = end_time - start_time
@@ -150,17 +163,18 @@ def main():
 
     elif args.model == "DAN":
         # Load pre-trained GloVe embeddings (e.g., 50d)
-        glove_embeddings = read_word_embeddings("data/glove.6B.300d-relativized.txt")
+        #glove_embeddings = read_word_embeddings("data/glove.6B.300d-relativized.txt")
 
         # Initialize the DAN model
-        dan_model = DAN(embeddings=glove_embeddings, hidden_size=300, dropout=0.1, num_layers=2, fine_tune_embeddings=False)
+        dan_model = DAN(embeddings=glove_embeddings, hidden_size=64, dropout=0.5, num_layers=2, fine_tune_embeddings=False)
 
-        # Now train the DAN model like the BOW models
-        #experiment(dan_model, train_loader, test_loader)
-    
         # Train and evaluate the DAN model
         print('\nTraining DAN model:')
+        start_time = time.time()
         dan_train_accuracy, dan_test_accuracy = experiment(dan_model, train_loader, test_loader)
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        print(f"Trained in : {elapsed_time} seconds")
 
         # Plot results (similar to BOW)
         plt.figure(figsize=(8, 6))
@@ -172,6 +186,8 @@ def main():
         plt.legend()
         plt.grid()
         plt.show()
+
+
 
 if __name__ == "__main__":
     main()
