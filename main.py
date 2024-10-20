@@ -290,8 +290,10 @@ def main():
         # Save the training accuracy figure
         if args.tokenization == 'bpe':
             train_dev_accuracy_file = f'plot_{args.tokenization}_embdim{args.embedding_size}_vs{args.bpe_vocab_size}.png'
+        elif args.random_embedding:
+            train_dev_accuracy_file = f'plot_re_{args.tokenization}_embdim{args.embedding_size}_hid{args.hidden_size}_lr{args.lr}.png'
         else:
-            train_dev_accuracy_file = f'plot_{args.tokenization}_embdim{args.embedding_size}_hid{args.hidden_size}.png'
+            train_dev_accuracy_file = f'plot_gl_{args.tokenization}_embdim{args.embedding_size}_hid{args.hidden_size}_lr{args.lr}.png'
 
         plt.savefig("plots/train_dev_accuracy_file")
         print(f"\n\nTraining accuracy plot saved as {train_dev_accuracy_file}")
