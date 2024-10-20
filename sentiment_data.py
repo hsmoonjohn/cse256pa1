@@ -56,6 +56,31 @@ def read_sentiment_examples(infile: str) -> List[SentimentExample]:
     f.close()
     return exs
 
+def read_sentiment_examples_bpe(infile: str) -> List[SentimentExample]:
+    """
+    Reads sentiment examples for BPE tokenization in the format [0 or 1]<TAB>[raw sentence]; 
+    tokenizes each sentence as bytes and returns the examples.
+    
+    :param infile: file to read from
+    :return: a list of SentimentExamples parsed from the file (tokenized at byte level).
+    """
+    examples = []
+    with open(infile, 'r', encoding='utf-8') as f:
+        for line in f:
+            if len(line.strip()) > 0:
+                fields = line.split("\t")
+                if len(fields) == 2:
+                    label = 0 if "0" in fields[0] else 1
+                    sentence = fields[1].strip()
+
+                    # Tokenize sentence at byte level (for BPE)
+                    byte_encoded_sentence = list(sentence.encode('utf-8'))
+
+                    # Store the byte-level tokens (later converted to BPE)
+                    examples.append(SentimentExample(byte_encoded_sentence, label))
+
+    return examples
+
 
 def read_blind_sst_examples(infile: str) -> List[List[str]]:
     """
@@ -158,6 +183,33 @@ def read_word_embeddings(embeddings_file: str) -> WordEmbeddings:
     f.close()
     print("Read in " + repr(len(word_indexer)) + " vectors of size " + repr(vectors[0].shape[0]))
     # Turn vectors into a 2-D numpy array
+    return WordEmbeddings(word_indexer, np.array(vectors))
+
+def create_random_embeddings_bpe(bpe_vocab, embedding_dim: int) -> WordEmbeddings:
+    """
+    Creates random embeddings for each token in the BPE vocabulary.
+
+    Args:
+        bpe_vocab: Dictionary of BPE tokens and their corresponding indices.
+        embedding_dim: The dimension of the embeddings.
+
+    Returns:
+        WordEmbeddings object with BPE token embeddings.
+    """
+    word_indexer = Indexer()
+    vectors = []
+    # Add BPE tokens to the indexer and initialize random embeddings
+    for token, token_idx in bpe_vocab.items():
+        if token_idx != 'PAD':
+            word_indexer.add_and_get_index(token)
+            #vectors.append(np.random.randn(embedding_dim))
+            vectors.append(np.random.uniform(-0.1, 0.1,  embedding_dim).astype(np.float32))
+        else:
+            word_indexer.add_and_get_index("PAD")
+            vectors.append(np.zeros(embedding_dim))
+
+    print(f"Created embeddings for {len(word_indexer)} tokens with dimension {embedding_dim}")
+    
     return WordEmbeddings(word_indexer, np.array(vectors))
 
 

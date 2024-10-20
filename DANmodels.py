@@ -3,8 +3,66 @@
 import torch
 from torch import nn
 import torch.nn.functional as F
-from sentiment_data import read_sentiment_examples
+from sentiment_data import read_sentiment_examples, read_sentiment_examples_bpe
 from torch.utils.data import Dataset
+import re
+from collections import Counter
+
+# Step 1: Define the helper functions for BPE
+def get_stats(ids):
+    """
+    Get statistics of byte pair frequencies in a list of token ids.
+    """
+    counts = Counter()
+    for pair in zip(ids, ids[1:]):
+        counts[pair] = counts.get(pair, 0) + 1
+    return counts
+
+def merge(ids, pair, new_token):
+    """
+    Merge a pair of token ids in a list into a new token.
+    """
+    new_ids = []
+    i = 0
+    while i < len(ids):
+        if i < len(ids) - 1 and ids[i] == pair[0] and ids[i + 1] == pair[1]:
+            new_ids.append(new_token)
+            i += 2
+        else:
+            new_ids.append(ids[i])
+            i += 1
+    return new_ids
+
+def encode_bpe(byte_sequence, merges):
+    """
+    Encode a byte sequence into BPE tokens using the pre-trained BPE vocabulary and merge rules.
+    
+    Args:
+        byte_sequence (list of int): A list of integers representing the byte-level tokens.
+        bpe_vocab (dict): The BPE vocabulary with byte pairs as keys and merged tokens as values.
+        merges (dict): A dictionary of merges with pairs of byte tokens as keys and merged token IDs as values.
+    
+    Returns:
+        list of int: The final encoded sequence of BPE tokens.
+    """
+    tokens = list(byte_sequence)  # Start with the byte sequence (list of integers)
+    
+    # Apply BPE merges based on the pre-trained bpe_vocab and merge rules
+    while len(tokens) >= 2:
+        pairs = get_stats(tokens)  # Get all consecutive byte pairs
+        
+        # Find the pair that exists in the merges dictionary
+        pair = min(pairs, key=lambda p: merges.get(p, float("inf")))
+        
+        # Stop if no more pairs are found in the merges dictionary
+        if pair not in merges:
+            break
+        
+        # Merge the pair and replace with the new token from merges
+        new_token = merges[pair]
+        tokens = merge(tokens, pair, new_token)  # Perform the merge
+    
+    return tokens  # Return the final encoded BPE token sequence
 
 class DAN(nn.Module):
     def __init__(self, embeddings, hidden_size=300, dropout=0.3, num_layers=4, dropoutword=0.3, fine_tune_embeddings=False, random_embedding=False):
@@ -130,3 +188,46 @@ class SentimentDatasetDAN(Dataset):
         Return a tuple of (indexed sentence, label).
         """
         return self.indexed_sentences[idx], self.labels[idx]
+
+ 
+class SentimentDatasetBPE(Dataset):
+    def __init__(self, infile, bpe_vocab, merges, max_length=None):
+        # Read sentiment examples using byte-level tokenization
+        self.examples = read_sentiment_examples_bpe(infile)
+
+        # Extract byte-level sentences and labels
+        self.sentences = [ex.words for ex in self.examples]
+        self.labels = [ex.label for ex in self.examples]
+        self.bpe_vocab = bpe_vocab
+        self.max_length = max_length
+        self.pad_token_id = len(bpe_vocab)-1
+        self.merges = merges
+
+        # Tokenize and encode sentences using BPE
+        self.indexed_sentences = self._index_sentences()
+
+        # Convert labels to PyTorch tensors
+        self.labels = torch.tensor(self.labels, dtype=torch.long)
+
+    def _index_sentences(self):
+        indexed_sentences = []
+        for byte_sequence in self.sentences:
+            # Use BPE encoding to convert the byte sequence to BPE tokens
+            bpe_tokens = encode_bpe(byte_sequence, self.merges)
+
+            # Optionally pad or truncate to max_length
+            if self.max_length:
+                bpe_tokens = bpe_tokens[:self.max_length]
+                bpe_tokens += [self.pad_token_id] * (self.max_length - len(bpe_tokens))
+
+            indexed_sentences.append(bpe_tokens)
+
+        return [torch.tensor(indices, dtype=torch.long) for indices in indexed_sentences]
+
+    def __len__(self):
+        return len(self.examples)
+
+    def __getitem__(self, idx):
+        return self.indexed_sentences[idx], self.labels[idx]
+    
+    

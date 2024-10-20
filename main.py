@@ -11,9 +11,9 @@ import argparse
 import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 from BOWmodels import SentimentDatasetBOW, NN2BOW, NN3BOW
-from DANmodels import DAN, SentimentDatasetDAN
-from sentiment_data import read_word_embeddings
-
+#from DANmodels import DAN, SentimentDatasetDAN, SentimentDatasetBPE
+from sentiment_data import read_word_embeddings, create_random_embeddings_bpe
+from DANmodels import *
 
 # Training function
 def train_epoch(data_loader, model, loss_fn, optimizer):
@@ -96,6 +96,8 @@ def main():
     parser.add_argument('--embedding_size', type=int, default=300, help='Embedding vector size')
     parser.add_argument('--max_length', type=int, default=100, help='Sentence length cap')
     parser.add_argument('--random_embedding', action='store_true', help='Whether to initialize random embeddings')
+    parser.add_argument('--tokenization', type=str, choices=['word', 'bpe'], default='word', help='Tokenization method (word or bpe)')
+    parser.add_argument('--bpe_vocab_size', type=int, default=300, help='Vocabulary size for BPE tokenization')
     # Training-related arguments
     parser.add_argument('--batch_size', type=int, default=16, help='Batch size for training')
     parser.add_argument('--epochs', type=int, default=100, help='Number of training epochs')
@@ -105,31 +107,50 @@ def main():
     # Parse the command-line arguments
     args = parser.parse_args()
 
-    # Load GloVe embeddings and get the word indexer
-    if args.embedding_size == 300:
-        glove_embeddings = read_word_embeddings("data/glove.6B.300d-relativized.txt")
-    elif args.embedding_size == 50:
-        glove_embeddings = read_word_embeddings("data/glove.6B.50d-relativized.txt")
+    if args.tokenization == 'word':
+        # Load GloVe embeddings and get the word indexer
+        if args.embedding_size == 300:
+            glove_embeddings = read_word_embeddings("data/glove.6B.300d-relativized.txt")
+        elif args.embedding_size == 50:
+            glove_embeddings = read_word_embeddings("data/glove.6B.50d-relativized.txt")
     
-    # Use the same word indexer for both GloVe and random embeddings
-    word_indexer = glove_embeddings.word_indexer
+        # Use the same word indexer for both GloVe and random embeddings
+        word_indexer = glove_embeddings.word_indexer
 
-    if args.random_embedding:
-        # Initialize random embeddings with the same indexer
-        print("Using random embeddings with embedding size:", args.embedding_size)
-        rembedding = WordEmbeddings(word_indexer=word_indexer, random_init=True, embedding_dim=args.embedding_size)
-    else:
-        # Use GloVe embeddings
-        rembedding = glove_embeddings  # Use pre-trained GloVe embeddings
+        if args.random_embedding:
+            # Initialize random embeddings with the same indexer
+            print("Using random embeddings with embedding size:", args.embedding_size)
+            rembedding = WordEmbeddings(word_indexer=word_indexer, random_init=True, embedding_dim=args.embedding_size)
+        else:
+            # Use GloVe embeddings
+            rembedding = glove_embeddings  # Use pre-trained GloVe embeddings
 
-    # Load pretrained GloVe embeddings
-    #if args.embedding_size == 300:
-    #    glove_embeddings = read_word_embeddings("data/glove.6B.300d-relativized.txt")
-    #elif args.embedding_size == 50:
-    #    glove_embeddings = read_word_embeddings("data/glove.6B.50d-relativized.txt")
-    
-    # Obtain the word indexer from the pretrained embeddings
-    #word_indexer = glove_embeddings.word_indexer
+    elif args.tokenization == 'bpe':
+        #load train.text to train the bpe and store necessary instances.
+        start_time = time.time()
+        vocab_size = args.bpe_vocab_size
+        num_merges = vocab_size - 256
+        with open("data/train.txt", "r") as f:
+            text = f.read()
+        tokens = list(map(int, text.encode("utf-8")))
+        ids = list(tokens)  # Copy tokens to not modify the original list
+        merges = {}  # Map from pairs of integers to new tokens
+        # Perform BPE merging
+        for i in range(num_merges):
+            stats = get_stats(ids)
+            pair = max(stats, key=stats.get)
+            idx = 256 + i
+            ids = merge(ids, pair, idx)
+            merges[pair] = idx
+        # Now you have a merged `ids` and `merges` to form your vocabulary
+        vocab = {idx: bytes([idx]) for idx in range(256)}
+        for (p0, p1), idx in merges.items():
+            vocab[idx] = vocab[p0] + vocab[p1]
+        vocab[vocab_size] = 'PAD'       
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        print(f"BPE train in : {elapsed_time} seconds")
+
 
     # Load dataset
     start_time = time.time()
@@ -140,11 +161,19 @@ def main():
         test_loader = DataLoader(dev_data, batch_size=16, shuffle=False)
 
     elif args.model == "DAN":
-        max_length = args.max_length  # You can adjust this based on the dataset analysis
-        train_data = SentimentDatasetDAN("data/train.txt", word_indexer, max_length=max_length)
-        dev_data = SentimentDatasetDAN("data/dev.txt", word_indexer, max_length=max_length)
-        train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True)
-        test_loader = DataLoader(dev_data, batch_size=args.batch_size, shuffle=False)
+        if args.tokenization == 'word':
+            max_length = args.max_length  # You can adjust this based on the dataset analysis
+            train_data = SentimentDatasetDAN("data/train.txt", word_indexer, max_length=max_length)
+            dev_data = SentimentDatasetDAN("data/dev.txt", word_indexer, max_length=max_length)
+            train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True)
+            test_loader = DataLoader(dev_data, batch_size=args.batch_size, shuffle=False)
+
+        elif args.tokenization == 'bpe':
+            # Use the subword dataset
+            train_data = SentimentDatasetBPE("data/train.txt",bpe_vocab=vocab, merges=merges, max_length=args.max_length)
+            dev_data = SentimentDatasetBPE("data/dev.txt",bpe_vocab=vocab, merges=merges, max_length=args.max_length)
+            train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True)
+            test_loader = DataLoader(dev_data, batch_size=args.batch_size, shuffle=False)
 
     end_time = time.time()
     elapsed_time = end_time - start_time
@@ -220,6 +249,17 @@ def main():
                             dropoutword=args.dropoutword,
                             fine_tune_embeddings=args.fine_tune_embeddings,
                             random_embedding=args.random_embedding)
+            
+        elif args.tokenization == 'bpe':
+            bpe_embedding = create_random_embeddings_bpe(vocab, embedding_dim=args.embedding_size)
+            dan_model = DAN(embeddings=bpe_embedding,
+                            hidden_size=args.hidden_size,
+                            dropout=args.dropout,
+                            num_layers=args.num_layers,
+                            dropoutword=args.dropoutword,
+                            fine_tune_embeddings=True)
+
+
         else:
             dan_model = DAN(embeddings=glove_embeddings,
                             hidden_size=args.hidden_size,
@@ -248,8 +288,12 @@ def main():
         plt.show()
 
         # Save the training accuracy figure
-        train_dev_accuracy_file = 'train_dev_accuracy.png'
-        plt.savefig(train_dev_accuracy_file)
+        if args.tokenization == 'bpe':
+            train_dev_accuracy_file = f'plot_{args.tokenization}_embdim{args.embedding_size}_vs{args.bpe_vocab_size}.png'
+        else:
+            train_dev_accuracy_file = f'plot_{args.tokenization}_embdim{args.embedding_size}_hid{args.hidden_size}.png'
+
+        plt.savefig("plots/train_dev_accuracy_file")
         print(f"\n\nTraining accuracy plot saved as {train_dev_accuracy_file}")
 
 
