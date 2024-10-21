@@ -44,3 +44,10 @@ You can run following (recommend embedding_size =50 to faster result), also for 
 ```bash
 python main.py --model DAN --embedding_size 50 --random_embedding --lr 0.0001
 ```
+
+### 2a (DAN with BPE)
+You can run the following code:
+```bash
+python main.py --model DAN --lr 0.0001 --embedding_size 100 --tokenization bpe --bpe_vocab_size 1000
+```
+Vocab size must be larger than 256, since initial vocabulary start with UTF-8 encoding.
