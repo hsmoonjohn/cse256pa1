@@ -4,9 +4,9 @@
 
 This project is for UCSD CSE256 PA1, contains codes that implements a Deep Averaging Network (DAN) model for sentiment classification with Byte-Pair Encoding (BPE) and GloVe word embeddings.
 
-## Installation
+## Code Structures
+Beside the code provided by default, `DANmodels.py` contains codes that implements DAN model, as well as `SentimentDatasetDAN` and `SentimentDatasetBPE` class which is for creating dataset class for DAN (word token) and DAN with BPE tokenization.
 
-To get started, clone this repository and install the required packages:
 
 ```bash
 git clone https://github.com/yourusername/yourproject.git
