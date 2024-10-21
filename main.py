@@ -79,7 +79,7 @@ def experiment(model, train_loader, test_loader, lr=0.0001, weight_decay=5e-5):
 
         if epoch % 10 == 9:
             print(f'Epoch #{epoch + 1}: train accuracy {train_accuracy:.3f}, dev accuracy {test_accuracy:.3f}')
-    
+            print(f'Epoch #{epoch + 1}: train loss {train_loss:.3f}, dev loss {test_loss:.3f}')
     return all_train_accuracy, all_test_accuracy
 
 
@@ -109,10 +109,15 @@ def main():
 
     if args.tokenization == 'word':
         # Load GloVe embeddings and get the word indexer
-        if args.embedding_size == 300:
-            glove_embeddings = read_word_embeddings("data/glove.6B.300d-relativized.txt")
-        elif args.embedding_size == 50:
+        if not args.random_embedding:
+            if args.embedding_size == 300:
+                glove_embeddings = read_word_embeddings("data/glove.6B.300d-relativized.txt")
+            elif args.embedding_size == 50:
+                glove_embeddings = read_word_embeddings("data/glove.6B.50d-relativized.txt")
+            
+        else:
             glove_embeddings = read_word_embeddings("data/glove.6B.50d-relativized.txt")
+
     
         # Use the same word indexer for both GloVe and random embeddings
         word_indexer = glove_embeddings.word_indexer
@@ -285,7 +290,7 @@ def main():
         plt.title('Training and Dev Accuracy for DAN')
         plt.legend()
         plt.grid()
-        plt.show()
+        #plt.show()
 
         # Save the training accuracy figure
         if args.tokenization == 'bpe':
@@ -295,7 +300,7 @@ def main():
         else:
             train_dev_accuracy_file = f'plot_gl_{args.tokenization}_embdim{args.embedding_size}_hid{args.hidden_size}_lr{args.lr}.png'
 
-        plt.savefig("plots/train_dev_accuracy_file")
+        plt.savefig(f"plots/{train_dev_accuracy_file}")
         print(f"\n\nTraining accuracy plot saved as {train_dev_accuracy_file}")
 
 
